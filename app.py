@@ -1,43 +1,51 @@
 import streamlit as st
 import pandas as pd
-import requests
+import json
 
-st.title("GitHub JSON → CSV Converter")
+st.set_page_config(page_title="JSON to CSV Converter", layout="wide")
 
-github_url = st.text_input(
-    "GitHub Raw JSON URL",
-    placeholder="https://raw.githubusercontent.com/user/repo/main/data.json"
+st.title("📄 Postman JSON → CSV Converter")
+
+uploaded_file = st.file_uploader(
+    "Upload your Postman JSON response",
+    type=["json", "txt"]
 )
 
-if st.button("Convert"):
+if uploaded_file:
     try:
-        response = requests.get(github_url, timeout=30)
-        response.raise_for_status()
+        data = json.load(uploaded_file)
 
-        data = response.json()
+        # Update this path if your JSON structure differs
+        records = data.get("response", {}).get("body", {}).get("diamonds", [])
 
-        # Update this path based on your JSON structure
-        diamonds = data.get("response", {}).get("body", {}).get("diamonds", [])
-
-        if not diamonds:
-            st.error("No data found at response.body.diamonds")
+        if not records:
+            st.error("No records found at response.body.diamonds")
         else:
-            df = pd.json_normalize(diamonds)
+            df = pd.json_normalize(records)
 
             st.success(
-                f"Loaded {len(df):,} rows and {len(df.columns)} columns"
+                f"Successfully converted {len(df):,} rows and {len(df.columns)} columns"
             )
 
-            csv = df.to_csv(index=False)
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.metric("Rows", f"{len(df):,}")
+
+            with col2:
+                st.metric("Columns", len(df.columns))
+
+            st.subheader("Preview")
+            st.dataframe(df.head(20), use_container_width=True)
+
+            csv = df.to_csv(index=False).encode("utf-8")
 
             st.download_button(
-                "Download CSV",
-                csv,
-                "diamonds.csv",
-                "text/csv"
+                label="⬇️ Download CSV",
+                data=csv,
+                file_name="converted.csv",
+                mime="text/csv"
             )
 
-            st.dataframe(df.head())
-
     except Exception as e:
-        st.error(str(e))
+        st.error(f"Error processing file: {str(e)}")
